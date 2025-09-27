@@ -23,38 +23,47 @@ class _PayerScreenState extends State<PayerScreen> {
   }
 
   Future<void> _fetchPayers() async {
-    await Provider.of<PayerProvider>(context, listen: false).fetchPayers();
+    // Safe (listen: false) access before any await inside this method.
+    final provider = Provider.of<PayerProvider>(context, listen: false);
+    await provider.fetchPayers();
   }
 
-  // ฟังก์ชันสำหรับแสดง Dialog ยืนยันการลบ
   Future<void> _confirmDelete(BuildContext context, Payer payer) async {
+    // Capture dependencies BEFORE async gap to satisfy use_build_context_synchronously lint.
+    final payerProvider = Provider.of<PayerProvider>(context, listen: false);
+    final messenger = ScaffoldMessenger.of(context);
+
     final bool? confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         title: const Text('Confirm Delete'),
         content: Text('Are you sure you want to delete "${payer.name}"?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
             child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
 
-    if (confirm == true && mounted) {
+    if (confirm == true) {
+      // Check that the State is still mounted before using messenger/showing SnackBar.
+      if (!mounted) return;
       try {
-        await Provider.of<PayerProvider>(context, listen: false).deletePayer(payer.id!); // <--- เปลี่ยนจาก int.parse(payer.id!) เป็น payer.id!
-        ScaffoldMessenger.of(context).showSnackBar(
+        await payerProvider.deletePayer(payer.id!);
+        if (!mounted) return;
+        messenger.showSnackBar(
           const SnackBar(content: Text('Payer deleted successfully!')),
         );
       } catch (error) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error deleting payer: ${error.toString()}')),
+        if (!mounted) return;
+        messenger.showSnackBar(
+          SnackBar(content: Text('Error deleting payer: $error')),
         );
       }
     }
@@ -79,49 +88,51 @@ class _PayerScreenState extends State<PayerScreen> {
         builder: (ctx, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
-          } else if (snapshot.hasError) {
-            return Center(child: Text('An error occurred: ${snapshot.error}'));
-          } else {
-            return Consumer<PayerProvider>(
-              builder: (ctx, payerProvider, child) {
-                if (payerProvider.payers.isEmpty) {
-                  return const Center(
-                    child: Text('No payers added yet. Tap + to add one!'),
-                  );
-                }
-                return ListView.builder(
-                  itemCount: payerProvider.payers.length,
-                  itemBuilder: (ctx, i) {
-                    final payer = payerProvider.payers[i];
-                    return Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      child: ListTile(
-                        title: Text(payer.name),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit, color: Colors.blue),
-                              onPressed: () {
-                                Navigator.of(context).pushNamed(
-                                  ManagePayerScreen.routeName,
-                                  arguments: payer, // ส่ง Payer object เพื่อแก้ไข
-                                );
-                              },
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () => _confirmDelete(context, payer),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
+          }
+          if (snapshot.hasError) {
+            return Center(
+              child: Text('An error occurred: ${snapshot.error}'),
             );
           }
+          return Consumer<PayerProvider>(
+            builder: (ctx, payerProvider, child) {
+              if (payerProvider.payers.isEmpty) {
+                return const Center(
+                  child: Text('No payers added yet. Tap + to add one!'),
+                );
+              }
+              return ListView.builder(
+                itemCount: payerProvider.payers.length,
+                itemBuilder: (ctx, i) {
+                  final payer = payerProvider.payers[i];
+                  return Card(
+                    margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    child: ListTile(
+                      title: Text(payer.name),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit, color: Colors.blue),
+                            onPressed: () {
+                              Navigator.of(context).pushNamed(
+                                ManagePayerScreen.routeName,
+                                arguments: payer,
+                              );
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () => _confirmDelete(context, payer),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          );
         },
       ),
     );

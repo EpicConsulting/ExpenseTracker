@@ -2,11 +2,12 @@ import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+import 'dart:developer' as developer;
 
 class DatabaseHelper {
   static Database? _database;
   static const String dbName = 'expense_tracker.db';
-  static const int dbVersion = 2; // กำหนดเวอร์ชันฐานข้อมูลเป็น 2
+  static const int dbVersion = 3; // กำหนดเวอร์ชันฐานข้อมูลเป็น 3
 
   // Table Names
   static const String categoryTable = 'categories';
@@ -16,8 +17,7 @@ class DatabaseHelper {
   // Category Table Columns
   static const String categoryId = 'id';
   static const String categoryName = 'name';
-  // เพิ่มคอลัมน์สีสำหรับ Category (ถ้ามีในโมเดลของคุณ)
-  static const String categoryColor = 'color'; // ตรวจสอบว่าคุณได้เพิ่มคอลัมน์นี้ใน Category Model ด้วย
+  static const String categoryColor = 'color';
 
   // Expense Table Columns
   static const String expenseId = 'id';
@@ -27,6 +27,7 @@ class DatabaseHelper {
   static const String expenseDescription = 'description';
   static const String expenseImage = 'imagePath';
   static const String expensePayerId = 'payerId';
+  static const String expensePaymentType = 'paymentType';
 
   // Payer Table Columns
   static const String payerId = 'id';
@@ -41,7 +42,7 @@ class DatabaseHelper {
   Future<Database> _initDatabase() async {
     Directory documentsDirectory = await getApplicationDocumentsDirectory();
     String path = join(documentsDirectory.path, dbName);
-    print('Database path: $path');
+    developer.log('Database path: $path', name: 'DatabaseHelper');
     return await openDatabase(
       path,
       version: dbVersion,
@@ -51,33 +52,29 @@ class DatabaseHelper {
     );
   }
 
-  // เพิ่ม onConfigure เพื่อเปิดใช้งาน Foreign Keys
   Future _onConfigure(Database db) async {
     await db.execute('PRAGMA foreign_keys = ON');
-    print('Foreign keys enabled.');
+    developer.log('Foreign keys enabled.', name: 'DatabaseHelper');
   }
 
   Future _onCreate(Database db, int version) async {
-    // Create Categories Table
     await db.execute('''
       CREATE TABLE $categoryTable (
         $categoryId INTEGER PRIMARY KEY AUTOINCREMENT,
         $categoryName TEXT NOT NULL UNIQUE,
-        $categoryColor INTEGER NOT NULL DEFAULT 0 -- เพิ่ม DEFAULT value สำหรับสี
+        $categoryColor INTEGER NOT NULL DEFAULT 0
       )
     ''');
-    print('Category table created.');
+    developer.log('Category table created.', name: 'DatabaseHelper');
 
-    // Create Payers Table
     await db.execute('''
       CREATE TABLE $payerTable (
         $payerId INTEGER PRIMARY KEY AUTOINCREMENT,
         $payerName TEXT NOT NULL UNIQUE
       )
     ''');
-    print('Payer table created.');
+    developer.log('Payer table created.', name: 'DatabaseHelper');
 
-    // Create Expenses Table
     await db.execute('''
       CREATE TABLE $expenseTable (
         $expenseId INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,28 +84,26 @@ class DatabaseHelper {
         $expenseDescription TEXT,
         $expenseImage TEXT,
         $expensePayerId INTEGER,
+        $expensePaymentType TEXT NOT NULL DEFAULT 'cash',
         FOREIGN KEY ($expenseCategoryId) REFERENCES $categoryTable($categoryId) ON DELETE SET NULL,
         FOREIGN KEY ($expensePayerId) REFERENCES $payerTable($payerId) ON DELETE SET NULL
       )
     ''');
-    print('Expense table created.');
+    developer.log('Expense table created.', name: 'DatabaseHelper');
   }
 
-  // เมธอด onUpgrade สำหรับจัดการการเปลี่ยนแปลงโครงสร้างฐานข้อมูล
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    print('Upgrading database from version $oldVersion to $newVersion');
+    developer.log('Upgrading database from version $oldVersion to $newVersion', name: 'DatabaseHelper');
     if (oldVersion < 2) {
-      // ตรวจสอบและเพิ่มคอลัมน์ payerId ในตาราง expenses
       var columns = await db.rawQuery("PRAGMA table_info($expenseTable)");
       var hasPayerId = columns.any((column) => column['name'] == expensePayerId);
       if (!hasPayerId) {
         await db.execute('ALTER TABLE $expenseTable ADD COLUMN $expensePayerId INTEGER');
-        print('Added $expensePayerId to $expenseTable.');
+        developer.log('Added $expensePayerId to $expenseTable.', name: 'DatabaseHelper');
       } else {
-        print('$expensePayerId column already exists in $expenseTable.');
+        developer.log('$expensePayerId column already exists in $expenseTable.', name: 'DatabaseHelper');
       }
 
-      // ตรวจสอบและสร้างตาราง payers ถ้ายังไม่มี
       var tables = await db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='$payerTable'");
       if (tables.isEmpty) {
         await db.execute('''
@@ -117,28 +112,39 @@ class DatabaseHelper {
             $payerName TEXT NOT NULL UNIQUE
           )
         ''');
-        print('Payer table created during upgrade.');
+        developer.log('Payer table created during upgrade.', name: 'DatabaseHelper');
       } else {
-        print('$payerTable table already exists.');
+        developer.log('$payerTable table already exists.', name: 'DatabaseHelper');
       }
 
-      // สำหรับ Category table: เพิ่มคอลัมน์สี
       var categoryColumns = await db.rawQuery("PRAGMA table_info($categoryTable)");
       var hasCategoryColor = categoryColumns.any((column) => column['name'] == categoryColor);
       if (!hasCategoryColor) {
         await db.execute('ALTER TABLE $categoryTable ADD COLUMN $categoryColor INTEGER NOT NULL DEFAULT 0');
-        print('Added $categoryColor to $categoryTable.');
+        developer.log('Added $categoryColor to $categoryTable.', name: 'DatabaseHelper');
       }
     }
-    // เพิ่มเงื่อนไข if (oldVersion < X) สำหรับการเปลี่ยนแปลงในเวอร์ชันถัดไป
+    if (oldVersion < 3) {
+      var columns = await db.rawQuery("PRAGMA table_info($expenseTable)");
+      var hasPaymentType = columns.any((column) => column['name'] == expensePaymentType);
+      if (!hasPaymentType) {
+        await db.execute(
+            'ALTER TABLE $expenseTable ADD COLUMN $expensePaymentType TEXT NOT NULL DEFAULT \'cash\'');
+        developer.log('Added $expensePaymentType to $expenseTable.', name: 'DatabaseHelper');
+      } else {
+        developer.log('$expensePaymentType column already exists in $expenseTable.', name: 'DatabaseHelper');
+      }
+    }
   }
 
   // --- Category Operations ---
   Future<int> insertCategory(Map<String, dynamic> category) async {
     Database db = await database;
     try {
-      final id = await db.insert(categoryTable, category, conflictAlgorithm: ConflictAlgorithm.abort);
-      print('Inserted category with ID: $id and name: ${category[categoryName]}');
+      final id =
+          await db.insert(categoryTable, category, conflictAlgorithm: ConflictAlgorithm.abort);
+      developer.log('Inserted category with ID: $id and name: ${category[categoryName]}',
+          name: 'DatabaseHelper');
       return id;
     } on DatabaseException catch (e) {
       if (e.isUniqueConstraintError()) {
@@ -146,7 +152,7 @@ class DatabaseHelper {
       }
       rethrow;
     } catch (e) {
-      print('Error inserting category: $e');
+      developer.log('Error inserting category: $e', name: 'DatabaseHelper', error: e);
       rethrow;
     }
   }
@@ -159,12 +165,13 @@ class DatabaseHelper {
   Future<int> deleteCategory(int id) async {
     Database db = await database;
     try {
-      final rowsAffected = await db
-          .delete(categoryTable, where: '$categoryId = ?', whereArgs: [id]);
-      print('Deleted $rowsAffected rows from categories table for ID: $id');
+      final rowsAffected =
+          await db.delete(categoryTable, where: '$categoryId = ?', whereArgs: [id]);
+      developer.log('Deleted $rowsAffected rows from categories table for ID: $id',
+          name: 'DatabaseHelper');
       return rowsAffected;
     } catch (e) {
-      print('Error deleting category: $e');
+      developer.log('Error deleting category: $e', name: 'DatabaseHelper', error: e);
       rethrow;
     }
   }
@@ -183,7 +190,8 @@ class DatabaseHelper {
         whereArgs: [id],
         conflictAlgorithm: ConflictAlgorithm.abort,
       );
-      print('Updated $rowsAffected rows in categories table for ID: $id');
+      developer.log('Updated $rowsAffected rows in categories table for ID: $id',
+          name: 'DatabaseHelper');
       return rowsAffected;
     } on DatabaseException catch (e) {
       if (e.isUniqueConstraintError()) {
@@ -191,7 +199,7 @@ class DatabaseHelper {
       }
       rethrow;
     } catch (e) {
-      print('Error updating category: $e');
+      developer.log('Error updating category: $e', name: 'DatabaseHelper', error: e);
       rethrow;
     }
   }
@@ -200,8 +208,10 @@ class DatabaseHelper {
   Future<int> insertPayer(Map<String, dynamic> payer) async {
     Database db = await database;
     try {
-      final id = await db.insert(payerTable, payer, conflictAlgorithm: ConflictAlgorithm.abort);
-      print('Inserted payer with ID: $id and name: ${payer[payerName]}');
+      final id =
+          await db.insert(payerTable, payer, conflictAlgorithm: ConflictAlgorithm.abort);
+      developer.log('Inserted payer with ID: $id and name: ${payer[payerName]}',
+          name: 'DatabaseHelper');
       return id;
     } on DatabaseException catch (e) {
       if (e.isUniqueConstraintError()) {
@@ -209,7 +219,7 @@ class DatabaseHelper {
       }
       rethrow;
     } catch (e) {
-      print('Error inserting payer: $e');
+      developer.log('Error inserting payer: $e', name: 'DatabaseHelper', error: e);
       rethrow;
     }
   }
@@ -222,12 +232,13 @@ class DatabaseHelper {
   Future<int> deletePayer(int id) async {
     Database db = await database;
     try {
-      final rowsAffected = await db
-          .delete(payerTable, where: '$payerId = ?', whereArgs: [id]);
-      print('Deleted $rowsAffected rows from payers table for ID: $id');
+      final rowsAffected =
+          await db.delete(payerTable, where: '$payerId = ?', whereArgs: [id]);
+      developer.log('Deleted $rowsAffected rows from payers table for ID: $id',
+          name: 'DatabaseHelper');
       return rowsAffected;
     } catch (e) {
-      print('Error deleting payer: $e');
+      developer.log('Error deleting payer: $e', name: 'DatabaseHelper', error: e);
       rethrow;
     }
   }
@@ -242,7 +253,8 @@ class DatabaseHelper {
         whereArgs: [id],
         conflictAlgorithm: ConflictAlgorithm.abort,
       );
-      print('Updated $rowsAffected rows in payers table for ID: $id');
+      developer.log('Updated $rowsAffected rows in payers table for ID: $id',
+          name: 'DatabaseHelper');
       return rowsAffected;
     } on DatabaseException catch (e) {
       if (e.isUniqueConstraintError()) {
@@ -250,7 +262,7 @@ class DatabaseHelper {
       }
       rethrow;
     } catch (e) {
-      print('Error updating payer: $e');
+      developer.log('Error updating payer: $e', name: 'DatabaseHelper', error: e);
       rethrow;
     }
   }
@@ -259,11 +271,13 @@ class DatabaseHelper {
   Future<int> insertExpense(Map<String, dynamic> expense) async {
     Database db = await database;
     try {
-      final id = await db.insert(expenseTable, expense, conflictAlgorithm: ConflictAlgorithm.replace);
-      print('Inserted expense with ID: $id and amount: ${expense[expenseAmount]}');
+      final id =
+          await db.insert(expenseTable, expense, conflictAlgorithm: ConflictAlgorithm.replace);
+      developer.log('Inserted expense with ID: $id and amount: ${expense[expenseAmount]}',
+          name: 'DatabaseHelper');
       return id;
     } catch (e) {
-      print('Error inserting expense: $e');
+      developer.log('Error inserting expense: $e', name: 'DatabaseHelper', error: e);
       rethrow;
     }
   }
@@ -277,10 +291,11 @@ class DatabaseHelper {
         where: '$expenseId = ?',
         whereArgs: [expense[expenseId]],
       );
-      print('Updated $rowsAffected rows in expenses table for ID: ${expense[expenseId]}');
+      developer.log('Updated $rowsAffected rows in expenses table for ID: ${expense[expenseId]}',
+          name: 'DatabaseHelper');
       return rowsAffected;
     } catch (e) {
-      print('Error updating expense: $e');
+      developer.log('Error updating expense: $e', name: 'DatabaseHelper', error: e);
       rethrow;
     }
   }
@@ -288,16 +303,17 @@ class DatabaseHelper {
   Future<int> deleteExpense(int id) async {
     Database db = await database;
     try {
-      final rowsAffected = await db.delete(expenseTable, where: '$expenseId = ?', whereArgs: [id]);
-      print('Deleted $rowsAffected rows from expenses table for ID: $id');
+      final rowsAffected =
+          await db.delete(expenseTable, where: '$expenseId = ?', whereArgs: [id]);
+      developer.log('Deleted $rowsAffected rows from expenses table for ID: $id',
+          name: 'DatabaseHelper');
       return rowsAffected;
     } catch (e) {
-      print('Error deleting expense: $e');
+      developer.log('Error deleting expense: $e', name: 'DatabaseHelper', error: e);
       rethrow;
     }
   }
 
-  // ดึงข้อมูลค่าใช้จ่ายทั้งหมด พร้อมชื่อหมวดหมู่และชื่อผู้จ่าย
   Future<List<Map<String, dynamic>>> getExpenses() async {
     Database db = await database;
     return await db.rawQuery('''
@@ -309,8 +325,9 @@ class DatabaseHelper {
         e.$expenseDescription AS description,
         e.$expenseImage AS imagePath,
         e.$expensePayerId AS payerId,
+        e.$expensePaymentType AS paymentType,
         c.$categoryName AS categoryName,
-        c.$categoryColor AS categoryColor, -- เพิ่ม categoryColor
+        c.$categoryColor AS categoryColor,
         p.$payerName AS payerName
       FROM $expenseTable AS e
       LEFT JOIN $categoryTable AS c
@@ -321,7 +338,6 @@ class DatabaseHelper {
     ''');
   }
 
-  // ดึงวันที่ที่มีค่าใช้จ่ายสำหรับเดือนที่ระบุ (สำหรับ TableCalendar)
   Future<List<Map<String, dynamic>>> getDatesWithExpensesForMonth(int year, int month) async {
     Database db = await database;
     final DateTime startOfMonth = DateTime(year, month, 1);
@@ -338,68 +354,28 @@ class DatabaseHelper {
     ]);
   }
 
-  // lib/services/database_helper.dart
-
   Future<List<int>> getDistinctExpenseYears() async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.rawQuery('''
-    SELECT DISTINCT strftime('%Y', ${DatabaseHelper.expenseDate}) AS year
-    FROM ${DatabaseHelper.expenseTable}
-    ORDER BY year DESC
-  ''');
+      SELECT DISTINCT strftime('%Y', $expenseDate) AS year
+      FROM $expenseTable
+      ORDER BY year DESC
+    ''');
     return maps.map((map) => int.parse(map['year'] as String)).toList();
   }
-
-// ถ้า ExpenseProvider ยังคงเรียกเมธอดนี้สำหรับดึงค่าใช้จ่ายรายวันพร้อม Join
-// ควรใช้เมธอดนี้แทน getExpenses() หรือสร้างเมธอดเฉพาะสำหรับวัน
-// แต่จากโค้ด ExpenseProvider ล่าสุดที่ผมให้ไป มันจะดึงทั้งหมดแล้วกรอง
-// ดังนั้น getExpenses() ด้านบนน่าจะเพียงพอ
-/*
-  Future<List<Map<String, dynamic>>> getExpensesForSpecificDay(int year, int month, int day) async {
-    Database db = await database;
-    final DateTime startOfDay = DateTime(year, month, day);
-    final DateTime endOfDay = startOfDay.endOfDay;
-
-    return await db.rawQuery('''
-      SELECT
-        e.$expenseId AS id,
-        e.$expenseAmount AS amount,
-        e.$expenseDate AS date,
-        e.$expenseCategoryId AS categoryId,
-        e.$expenseDescription AS description,
-        e.$expenseImage AS imagePath,
-        e.$expensePayerId AS payerId,
-        c.$categoryName AS categoryName,
-        c.$categoryColor AS categoryColor,
-        p.$payerName AS payerName
-      FROM $expenseTable AS e
-      LEFT JOIN $categoryTable AS c
-        ON e.$expenseCategoryId = c.$categoryId
-      LEFT JOIN $payerTable AS p
-        ON e.$expensePayerId = p.$payerId
-      WHERE e.$expenseDate BETWEEN ? AND ?
-      ORDER BY e.$expenseDate DESC
-    ''', [
-      startOfDay.toIso8601String(),
-      endOfDay.toIso8601String(),
-    ]);
-  }
-  */
 }
 
-// Extension เพื่อช่วยในการหาจุดสิ้นสุดของวัน (รวมเวลา 23:59:59)
 extension DateTimeExtension on DateTime {
   DateTime get endOfDay {
     return DateTime(year, month, day, 23, 59, 59, 999, 999);
   }
 }
 
-// Extension สำหรับ DatabaseException เพื่อตรวจสอบ Unique Constraint Error
 extension DatabaseExceptionExtension on DatabaseException {
   bool isUniqueConstraintError() {
-    // ตรวจสอบข้อความ Error ที่บ่งบอกถึง Unique Constraint
-    // อาจแตกต่างกันไปในแต่ละเวอร์ชันของ SQLite หรือแพลตฟอร์ม
-    return this.toString().contains('UNIQUE constraint failed') ||
-        this.toString().contains('constraint failed');
+    // Removed unnecessary 'this.' qualifiers per lint
+    final message = toString();
+    return message.contains('UNIQUE constraint failed') ||
+        message.contains('constraint failed');
   }
 }

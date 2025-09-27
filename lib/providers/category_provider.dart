@@ -1,5 +1,5 @@
-// lib/providers/category_provider.dart
 import 'package:flutter/material.dart';
+import 'dart:developer' as developer;
 import '../models/category.dart';
 import '../services/database_helper.dart';
 
@@ -18,9 +18,9 @@ class CategoryProvider with ChangeNotifier {
       final dataList = await _dbHelper.getCategories();
       _categories = dataList.map((item) => Category.fromMap(item)).toList();
       notifyListeners();
-      print('Categories fetched: ${_categories.length} items');
+      developer.log('Categories fetched: ${_categories.length} items', name: 'CategoryProvider');
     } catch (e) {
-      print('Error fetching categories: $e');
+      developer.log('Error fetching categories: $e', name: 'CategoryProvider', error: e);
     }
   }
 
@@ -28,10 +28,10 @@ class CategoryProvider with ChangeNotifier {
   Future<void> addCategory(Category category) async {
     try {
       await _dbHelper.insertCategory(category.toMap());
-      print('Category added: ${category.name}');
+      developer.log('Category added: ${category.name}', name: 'CategoryProvider');
       await fetchCategories(); // รีเฟรชข้อมูลหลังจากเพิ่ม
     } catch (e) {
-      print('Error adding category: $e');
+      developer.log('Error adding category: $e', name: 'CategoryProvider', error: e);
       rethrow;
     }
   }
@@ -39,10 +39,10 @@ class CategoryProvider with ChangeNotifier {
   Future<void> deleteCategory(int id) async {
     try {
       await _dbHelper.deleteCategory(id);
-      print('Category deleted with ID: $id');
+      developer.log('Category deleted with ID: $id', name: 'CategoryProvider');
       await fetchCategories(); // รีเฟรชข้อมูลหลังจากลบ
     } catch (e) {
-      print('Error deleting category: $e');
+      developer.log('Error deleting category: $e', name: 'CategoryProvider', error: e);
       rethrow;
     }
   }
@@ -50,13 +50,11 @@ class CategoryProvider with ChangeNotifier {
   // ปรับปรุงการเรียก _dbHelper.updateCategory ให้ตรงกับ signature ของ DatabaseHelper
   Future<void> updateCategory(int id, String newName, {int? newColor}) async {
     try {
-      // ไม่ต้องสร้าง updatedCategory object แล้วส่ง toMap
-      // ให้ส่งค่า id, newName, newColor ไปตรงๆ
       await _dbHelper.updateCategory(id, newName, newColor);
-      print('Category updated: ID=$id, New Name=$newName, New Color=$newColor');
+      developer.log('Category updated: ID=$id, New Name=$newName, New Color=$newColor', name: 'CategoryProvider');
       await fetchCategories(); // รีเฟรชข้อมูลหลังจากอัปเดต
     } catch (e) {
-      print('Error updating category: $e');
+      developer.log('Error updating category: $e', name: 'CategoryProvider', error: e);
       rethrow;
     }
   }

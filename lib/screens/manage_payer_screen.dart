@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-// import 'package:uuid/uuid.dart'; // <--- ลบ import นี้ออกไป
 import '../models/payer.dart';
 import '../providers/payer_provider.dart';
 
@@ -16,8 +15,8 @@ class ManagePayerScreen extends StatefulWidget {
 class _ManagePayerScreenState extends State<ManagePayerScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  Payer? _editedPayer; // เก็บ Payer ที่กำลังแก้ไข (ถ้ามี)
-  var _isInit = true; // ตรวจสอบว่าเป็นการเริ่มต้นครั้งแรก
+  Payer? _editedPayer;
+  var _isInit = true;
 
   @override
   void didChangeDependencies() {
@@ -40,7 +39,7 @@ class _ManagePayerScreenState extends State<ManagePayerScreen> {
 
   Future<void> _saveForm() async {
     if (!_formKey.currentState!.validate()) {
-      return; // ฟอร์มไม่ถูกต้อง
+      return;
     }
     _formKey.currentState!.save();
 
@@ -50,22 +49,23 @@ class _ManagePayerScreenState extends State<ManagePayerScreen> {
       final payerProvider = Provider.of<PayerProvider>(context, listen: false);
 
       if (_editedPayer == null) {
-        // เพิ่มผู้จ่ายใหม่
-        final newPayer = Payer(name: payerName); // <--- ไม่ต้องใส่ id: const Uuid().v4() แล้ว
+        final newPayer = Payer(name: payerName);
         await payerProvider.addPayer(newPayer);
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Payer added successfully!')),
         );
       } else {
-        // อัปเดตผู้จ่ายที่มีอยู่
         final updatedPayer = Payer(id: _editedPayer!.id, name: payerName);
         await payerProvider.updatePayer(updatedPayer);
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Payer updated successfully!')),
         );
       }
       if (mounted) Navigator.of(context).pop();
     } catch (error) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error saving payer: ${error.toString()}')),
       );
@@ -74,7 +74,6 @@ class _ManagePayerScreenState extends State<ManagePayerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ... โค้ดที่เหลือเหมือนเดิม
     return Scaffold(
       appBar: AppBar(
         title: Text(_editedPayer == null ? 'Add Payer' : 'Edit Payer'),

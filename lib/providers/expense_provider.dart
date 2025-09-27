@@ -7,7 +7,7 @@ import '../services/database_helper.dart';
 
 class ExpenseProvider with ChangeNotifier {
   List<Expense> _expenses = [];
-  final DatabaseHelper _dbHelper = DatabaseHelper(); // *** แก้ไข: เพิ่มบรรทัดนี้เข้ามา ***
+  final DatabaseHelper _dbHelper = DatabaseHelper();
 
   List<Expense> get expenses {
     return [..._expenses];
@@ -21,7 +21,7 @@ class ExpenseProvider with ChangeNotifier {
   Future<void> addExpense(Expense expense) async {
     developer.log('Adding new expense: ${expense.amount}', name: 'ExpenseProvider');
     try {
-      final db = await _dbHelper.database; // ใช้ _dbHelper
+      final db = await _dbHelper.database;
       final id = await db.insert(
         DatabaseHelper.expenseTable,
         expense.toMap(),
@@ -38,6 +38,7 @@ class ExpenseProvider with ChangeNotifier {
         imagePath: expense.imagePath,
         payerId: expense.payerId,
         payerName: expense.payerName,
+        paymentType: expense.paymentType, // <-- ADDED!
       );
       _expenses.add(newExpense);
       notifyListeners();
@@ -51,7 +52,7 @@ class ExpenseProvider with ChangeNotifier {
   Future<void> updateExpense(Expense expense) async {
     developer.log('Updating expense with ID: ${expense.id}', name: 'ExpenseProvider');
     try {
-      final db = await _dbHelper.database; // ใช้ _dbHelper
+      final db = await _dbHelper.database;
       await db.update(
         DatabaseHelper.expenseTable,
         expense.toMap(),
@@ -74,7 +75,7 @@ class ExpenseProvider with ChangeNotifier {
   Future<void> deleteExpense(int id) async {
     developer.log('Deleting expense with ID: $id', name: 'ExpenseProvider');
     try {
-      final db = await _dbHelper.database; // ใช้ _dbHelper
+      final db = await _dbHelper.database;
       await db.delete(
         DatabaseHelper.expenseTable,
         where: '${DatabaseHelper.expenseId} = ?',
@@ -92,7 +93,7 @@ class ExpenseProvider with ChangeNotifier {
   Future<void> fetchExpenses() async {
     developer.log('Fetching all expenses...', name: 'ExpenseProvider');
     try {
-      final db = await _dbHelper.database; // ใช้ _dbHelper
+      final db = await _dbHelper.database;
       final List<Map<String, dynamic>> expenseMaps = await db.rawQuery('''
         SELECT
           e.${DatabaseHelper.expenseId} AS id,
@@ -102,6 +103,7 @@ class ExpenseProvider with ChangeNotifier {
           e.${DatabaseHelper.expenseDescription} AS description,
           e.${DatabaseHelper.expenseImage} AS imagePath,
           e.${DatabaseHelper.expensePayerId} AS payerId,
+          e.${DatabaseHelper.expensePaymentType} AS paymentType,        // <-- ADDED!
           c.${DatabaseHelper.categoryName} AS categoryName,
           p.${DatabaseHelper.payerName} AS payerName
         FROM ${DatabaseHelper.expenseTable} AS e
@@ -117,14 +119,13 @@ class ExpenseProvider with ChangeNotifier {
       developer.log('Fetched ${_expenses.length} expenses.', name: 'ExpenseProvider');
     } catch (e) {
       developer.log('Error fetching expenses: $e', name: 'ExpenseProvider', error: e);
-      // อาจจะโยน exception หรือจัดการ error ที่เหมาะสมกว่านี้
     }
   }
 
   Future<List<Map<String, dynamic>>> getDatesWithExpensesForMonth(int year, int month) async {
     developer.log('Getting dates with expenses for month: $month/$year', name: 'ExpenseProvider');
     try {
-      final db = await _dbHelper.database; // ใช้ _dbHelper
+      final db = await _dbHelper.database;
       final DateTime startOfMonth = DateTime(year, month, 1);
       final DateTime endOfMonth = DateTime(year, month + 1, 0).endOfDay;
 

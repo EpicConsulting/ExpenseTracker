@@ -8,6 +8,7 @@ class Expense {
   final int? payerId; // ID ของผู้จ่าย (FK)
   final String? payerName; // ชื่อผู้จ่าย (สำหรับแสดงผล)
   final String? categoryName; // ชื่อหมวดหมู่ (สำหรับแสดงผล)
+  final String paymentType;
 
   Expense({
     this.id,
@@ -19,12 +20,9 @@ class Expense {
     this.payerId,
     this.payerName,
     this.categoryName,
+    required this.paymentType,    
   });
 
-  /// สร้าง Expense object จาก Map (สำหรับดึงข้อมูลจากฐานข้อมูล)
-  ///
-  /// ใช้ `as` keyword เพื่อทำการ cast type ให้ชัดเจน
-  /// และใช้ `?` operator เพื่อระบุว่าค่าอาจเป็น null ได้
   factory Expense.fromMap(Map<String, dynamic> map) {
     return Expense(
       id: map['id'] as int?, // ใช้ as int?
@@ -36,6 +34,7 @@ class Expense {
       payerId: map['payerId'] as int?, // ใช้ as int?
       payerName: map['payerName'] as String?, // ใช้ as String?
       categoryName: map['categoryName'] as String?, // ใช้ as String?
+      paymentType: map['paymentType'] as String, // ใช้ as String
     );
   }
 
@@ -52,11 +51,12 @@ class Expense {
       'description': description,
       'imagePath': imagePath,
       'payerId': payerId,
+      'paymentType': paymentType,      
     };
   }
 
   @override
   String toString() {
-    return 'Expense(id: $id, amount: $amount, date: $date, categoryId: $categoryId, description: $description, imagePath: $imagePath, payerId: $payerId, payerName: $payerName, categoryName: $categoryName)';
+    return 'Expense(id: $id, amount: $amount, date: $date, categoryId: $categoryId, description: $description, imagePath: $imagePath, payerId: $payerId, payerName: $payerName, categoryName: $categoryName, paymentType: $paymentType)';
   }
 }

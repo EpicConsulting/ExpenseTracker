@@ -4,15 +4,12 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
 import 'dart:developer' as developer;
 
-import '../models/expense.dart';
-import '../models/category.dart'; // อาจจะต้องใช้ในอนาคตหากจะแสดงรายละเอียดหมวดหมู่
-import '../models/payer.dart'; // เพิ่ม import สำหรับ Payer model
+import '../models/payer.dart';
 import '../providers/expense_provider.dart';
-import '../providers/category_provider.dart'; // อาจจะต้องใช้ในอนาคตหากจะแสดงรายละเอียดหมวดหมู่
-import '../providers/payer_provider.dart'; // เพิ่ม import สำหรับ PayerProvider
+import '../providers/payer_provider.dart';
 import '../widgets/app_drawer.dart';
-import './expense_detail_screen.dart'; // เปลี่ยนชื่อเป็น expense_detail_screen.dart หาก ManageExpenseScreen ไม่มี
-import './payer_expenses_detail_screen.dart'; // เพิ่ม import สำหรับหน้าจอใหม่
+import './expense_detail_screen.dart';
+import './payer_expenses_detail_screen.dart';
 
 class MainScreen extends StatefulWidget {
   static const routeName = '/';
@@ -26,7 +23,7 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
-  CalendarFormat _calendarFormat = CalendarFormat.month;
+  final CalendarFormat _calendarFormat = CalendarFormat.month; // Made final
 
   Map<DateTime, List<dynamic>> _events = {};
 
@@ -37,7 +34,7 @@ class _MainScreenState extends State<MainScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       Provider.of<ExpenseProvider>(context, listen: false).fetchExpenses();
-      Provider.of<PayerProvider>(context, listen: false).fetchPayers(); // โหลดข้อมูล Payer ด้วย
+      Provider.of<PayerProvider>(context, listen: false).fetchPayers();
     });
 
     _loadExpensesForCalendar();
@@ -55,13 +52,13 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Future<void> _loadExpensesForCalendar() async {
-    final expenseProvider = Provider.of<ExpenseProvider>(context, listen: false);
-
+    // Only use context if mounted
     if (!mounted) {
       developer.log('MainScreen: _loadExpensesForCalendar called but not mounted', name: 'MainScreen');
       return;
     }
 
+    final expenseProvider = Provider.of<ExpenseProvider>(context, listen: false);
     final datesWithExpenses = await expenseProvider.getDatesWithExpensesForMonth(
       _focusedDay.year,
       _focusedDay.month,
@@ -104,32 +101,32 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     final expenseProvider = Provider.of<ExpenseProvider>(context);
-    final payerProvider = Provider.of<PayerProvider>(context); // เข้าถึง PayerProvider
+    final payerProvider = Provider.of<PayerProvider>(context);
 
-    // กรองค่าใช้จ่ายสำหรับวันที่เลือก
+    // Filter expenses for the selected day
     final expensesOnSelectedDay = _selectedDay != null
         ? expenseProvider.expenses.where((exp) =>
-    exp.date.year == _selectedDay!.year &&
-        exp.date.month == _selectedDay!.month &&
-        exp.date.day == _selectedDay!.day
-    ).toList()
+            exp.date.year == _selectedDay!.year &&
+            exp.date.month == _selectedDay!.month &&
+            exp.date.day == _selectedDay!.day
+          ).toList()
         : [];
 
-    // คำนวณยอดรวมตาม Payer
+    // Calculate totals per payer
     Map<int, double> payerTotals = {};
-    Map<int, Payer> payerMap = {for (var p in payerProvider.payers) p.id!: p}; // สร้าง Map เพื่อหา Payer ได้เร็วขึ้น
+    Map<int, Payer> payerMap = {for (var p in payerProvider.payers) p.id!: p};
 
     for (var expense in expensesOnSelectedDay) {
       if (expense.payerId != null) {
         payerTotals.update(
           expense.payerId!,
-              (value) => value + expense.amount,
+          (value) => value + expense.amount,
           ifAbsent: () => expense.amount,
         );
       }
     }
 
-    // แปลง Map เป็น List ของ PayerSummary สำหรับแสดงผล
+    // Convert Map to List of PayerSummary for display
     List<PayerSummary> payerSummaries = payerTotals.entries.map((entry) {
       final payer = payerMap[entry.key];
       return PayerSummary(
@@ -139,8 +136,7 @@ class _MainScreenState extends State<MainScreen> {
       );
     }).toList();
 
-    // เรียงลำดับตามชื่อ Payer หรือยอดรวมตามต้องการ
-    payerSummaries.sort((a, b) => b.totalAmount.compareTo(a.totalAmount)); // เรียงจากมากไปน้อย
+    payerSummaries.sort((a, b) => b.totalAmount.compareTo(a.totalAmount));
 
     return Scaffold(
       appBar: AppBar(
@@ -158,7 +154,6 @@ class _MainScreenState extends State<MainScreen> {
             onDaySelected: _onDaySelected,
             onPageChanged: _onPageChanged,
             eventLoader: _getEventsForDay,
-
             headerStyle: const HeaderStyle(
               formatButtonVisible: false,
               titleCentered: true,
@@ -236,45 +231,43 @@ class _MainScreenState extends State<MainScreen> {
           Expanded(
             child: payerSummaries.isEmpty
                 ? const Center(
-              child: Text('No expenses recorded for this day.'),
-            )
+                    child: Text('No expenses recorded for this day.'),
+                  )
                 : ListView.builder(
-              itemCount: payerSummaries.length,
-              itemBuilder: (ctx, index) {
-                final summary = payerSummaries[index];
-                return Card(
-                  margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 16),
-                  child: ListTile(
-                    title: Text(summary.payerName),
-                    trailing: Text('${summary.totalAmount.toStringAsFixed(2)} ฿'),
-                    onTap: () {
-                      // นำทางไปยังหน้าจอรายละเอียดค่าใช้จ่ายของ Payer นั้น
-                      Navigator.of(context).pushNamed(
-                        PayerExpensesDetailScreen.routeName,
-                        arguments: {
-                          'selectedDay': _selectedDay,
-                          'payerId': summary.payerId,
-                          'payerName': summary.payerName,
-                        },
+                    itemCount: payerSummaries.length,
+                    itemBuilder: (ctx, index) {
+                      final summary = payerSummaries[index];
+                      return Card(
+                        margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 16),
+                        child: ListTile(
+                          title: Text(summary.payerName),
+                          trailing: Text('${summary.totalAmount.toStringAsFixed(2)} ฿'),
+                          onTap: () {
+                            Navigator.of(context).pushNamed(
+                              PayerExpensesDetailScreen.routeName,
+                              arguments: {
+                                'selectedDay': _selectedDay,
+                                'payerId': summary.payerId,
+                                'payerName': summary.payerName,
+                              },
+                            );
+                          },
+                        ),
                       );
                     },
                   ),
-                );
-              },
-            ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // ใช้ ExpenseDetailScreen แทน ManageExpenseScreen หากคุณเปลี่ยนชื่อ
+          final expenseProvider = Provider.of<ExpenseProvider>(context, listen: false);
           Navigator.of(context).pushNamed(
-            ExpenseDetailScreen.routeName, // ใช้ ExpenseDetailScreen
-            arguments: {'selectedDate': _selectedDay ?? DateTime.now(), 'existingExpense': null}, // ส่งวันที่ที่เลือกไป
+            ExpenseDetailScreen.routeName,
+            arguments: {'selectedDate': _selectedDay ?? DateTime.now(), 'existingExpense': null},
           ).then((_) {
             if (!mounted) return;
-            // หลังจากกลับมาจากหน้าเพิ่ม/แก้ไขค่าใช้จ่าย ให้โหลดข้อมูลใหม่เพื่ออัปเดตปฏิทินและรายการ
-            Provider.of<ExpenseProvider>(context, listen: false).fetchExpenses();
+            expenseProvider.fetchExpenses();
           });
         },
         child: const Icon(Icons.add),

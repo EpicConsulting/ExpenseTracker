@@ -50,6 +50,8 @@ class _ExpenseDetailScreenState extends State<ExpenseDetailScreen> {
     _editedExpense = widget.existingExpense;
   }
 
+  String _selectedPaymentType = 'cash'; // <-- เพิ่มตรงนี้
+
   @override
   void didChangeDependencies() {
     if (_isInit) {
@@ -74,6 +76,7 @@ class _ExpenseDetailScreenState extends State<ExpenseDetailScreen> {
         _pickedImage = _editedExpense!.imagePath != null
             ? File(_editedExpense!.imagePath!)
             : null;
+        _selectedPaymentType = _editedExpense!.paymentType;
 
         // ดึง category และ payer จาก provider เพื่อตั้งค่า Dropdown
         final categoryProvider = Provider.of<CategoryProvider>(context, listen: false);
@@ -193,6 +196,7 @@ class _ExpenseDetailScreenState extends State<ExpenseDetailScreen> {
       imagePath: _pickedImage?.path, // บันทึก path ของรูปภาพ
       payerId: _selectedPayer!.id,
       payerName: _selectedPayer!.name, // ใส่ชื่อผู้จ่ายด้วย
+      paymentType: _selectedPaymentType,
     );
 
     try {
@@ -357,6 +361,32 @@ class _ExpenseDetailScreenState extends State<ExpenseDetailScreen> {
                 },
               ),
               const SizedBox(height: 20),
+              // --- Payment Type ---
+              DropdownButtonFormField<String>(
+                value: _selectedPaymentType,
+                decoration: const InputDecoration(
+                  labelText: 'Payment Type',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'cash',
+                    child: Text('เงินสด'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'credit_card',
+                    child: Text('บัตรเครดิต'),
+                  ),
+                ],
+                onChanged: (String? newValue) {
+                  if (newValue != null) setState(() => _selectedPaymentType = newValue);
+                },
+                validator: (value) {
+                  if (value == null || value.isEmpty) return 'กรุณาเลือกประเภทการจ่าย';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 20),              
               // ส่วนสำหรับแนบรูปภาพ
               Row(
                 children: [

@@ -11,6 +11,9 @@ import '../providers/category_provider.dart';
 import '../providers/payer_provider.dart';
 import '../utils/extensions.dart';
 
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+
 class ManageExpenseScreen extends StatefulWidget {
   static const routeName = '/manage-expense';
 
@@ -29,27 +32,26 @@ class _ManageExpenseScreenState extends State<ManageExpenseScreen> {
   Payer? _selectedPayer;
   Expense? _editedExpense;
   var _isInit = true;
+  File? _pickedImage;
+  final ImagePicker _picker = ImagePicker();
+
+  String _selectedPaymentType = 'cash'; // <<<<<< ADD HERE
 
   @override
   void didChangeDependencies() {
     if (_isInit) {
       final dynamic args = ModalRoute.of(context)!.settings.arguments;
 
-      // ใช้ WidgetsBinding.instance.addPostFrameCallback เพื่อเข้าถึง Provider หลังจาก build
-      // และเพื่อให้แน่ใจว่า context ยัง mounted อยู่
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return; // ตรวจสอบ mounted ก่อนใช้ context
+        if (!mounted) return;
 
         final categoryProvider = Provider.of<CategoryProvider>(context, listen: false);
         final payerProvider = Provider.of<PayerProvider>(context, listen: false);
 
         if (args is Expense) {
-          // *** กรณีแก้ไข Expense ***
           _editedExpense = args;
           _amountController.text = _editedExpense!.amount.toString();
-          _descriptionController.text = _editedExpense!.description ?? '';
-
-          // ตั้งค่า _selectedDate โดยรวมเวลาปัจจุบันเข้าไปด้วย เพื่อไม่ให้เวลากลายเป็นเที่ยงคืน
+          _descriptionController.text = _editedExpense!.description;
           _selectedDate = _editedExpense!.date.copyWith(
             hour: _editedExpense!.date.hour,
             minute: _editedExpense!.date.minute,
@@ -57,38 +59,25 @@ class _ManageExpenseScreenState extends State<ManageExpenseScreen> {
             millisecond: _editedExpense!.date.millisecond,
             microsecond: _editedExpense!.date.microsecond,
           );
-
-          // ดึง category จาก provider
-          _selectedCategory = categoryProvider.categories
-              .firstWhereOrNull((cat) => cat.id == _editedExpense!.categoryId);
-
-          // ดึง payer จาก provider
-          _selectedPayer = payerProvider.payers
-              .firstWhereOrNull((p) => p.id == _editedExpense!.payerId);
-
+          _selectedCategory = categoryProvider.categories.firstWhereOrNull((cat) => cat.id == _editedExpense!.categoryId);
+          _selectedPayer = payerProvider.payers.firstWhereOrNull((p) => p.id == _editedExpense!.payerId);
+          // Set payment type if available
+          _selectedPaymentType = _editedExpense?.paymentType ?? 'cash';
         } else if (args is DateTime) {
-          // *** กรณีเพิ่ม Expense สำหรับวันที่เลือกจากหน้า MainScreen ***
           _selectedDate = args.copyWith(
             hour: DateTime.now().hour,
             minute: DateTime.now().minute,
             second: DateTime.now().second,
           );
         } else {
-          // *** กรณีเพิ่ม Expense ทั่วไป (ไม่มีวันที่ถูกเลือกจากหน้าหลัก) ***
           _selectedDate = DateTime.now();
         }
-
-        // *** กำหนดค่าเริ่มต้นสำหรับ Dropdown หากยังไม่มีการเลือก หรือหากค่าเดิมไม่ถูกต้อง ***
-        // นี่คือส่วนสำคัญที่ช่วยให้ Dropdown มีค่าเริ่มต้นเมื่อเปิดหน้าครั้งแรก
         if (_selectedCategory == null && categoryProvider.categories.isNotEmpty) {
-          _selectedCategory = categoryProvider.categories.first; // เลือก Category ตัวแรกเป็นค่าเริ่มต้น
+          _selectedCategory = categoryProvider.categories.first;
         }
         if (_selectedPayer == null && payerProvider.payers.isNotEmpty) {
-          _selectedPayer = payerProvider.payers.first; // เลือก Payer ตัวแรกเป็นค่าเริ่มต้น
+          _selectedPayer = payerProvider.payers.first;
         }
-
-
-        // ต้องเรียก setState() เพื่ออัปเดต UI หลังจากตั้งค่า _selectedCategory และ _selectedPayer
         if (mounted) {
           setState(() {});
         }
@@ -112,13 +101,9 @@ class _ManageExpenseScreenState extends State<ManageExpenseScreen> {
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
     );
-
-    // ตรวจสอบ mounted ก่อน setState
     if (!mounted) return;
-
     if (pickedDate != null) {
       setState(() {
-        // รักษาเวลาปัจจุบันไว้ (หรือเวลาเดิมถ้า _selectedDate ไม่ใช่ null)
         _selectedDate = pickedDate.copyWith(
           hour: _selectedDate?.hour ?? DateTime.now().hour,
           minute: _selectedDate?.minute ?? DateTime.now().minute,
@@ -128,15 +113,22 @@ class _ManageExpenseScreenState extends State<ManageExpenseScreen> {
     }
   }
 
+  Future<void> _pickImage() async {
+    final pickedFile = await _picker.pickImage(source: ImageSource.gallery, maxWidth: 600);
+    if (!mounted) return;
+    if (pickedFile != null) {
+      setState(() {
+        _pickedImage = File(pickedFile.path);
+      });
+    }
+  }
+
   Future<void> _saveForm() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
     _formKey.currentState!.save();
-
-    // ตรวจสอบ mounted ก่อนใช้ context
     if (!mounted) return;
-
     if (_selectedDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select a date.')),
@@ -163,16 +155,16 @@ class _ManageExpenseScreenState extends State<ManageExpenseScreen> {
       categoryId: _selectedCategory!.id,
       categoryName: _selectedCategory!.name,
       description: _descriptionController.text.trim(),
-      imagePath: null, // หรือเพิ่ม logic จัดการ imagePath ในอนาคต
+      imagePath: _pickedImage?.path,
       payerId: _selectedPayer!.id,
       payerName: _selectedPayer!.name,
+      paymentType: _selectedPaymentType, // <<<<<< ADD HERE
     );
 
     try {
       final expenseProvider = Provider.of<ExpenseProvider>(context, listen: false);
       if (_editedExpense == null) {
         await expenseProvider.addExpense(newExpense);
-        // ตรวจสอบ mounted ก่อนแสดง SnackBar
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Expense added successfully!')),
@@ -180,18 +172,15 @@ class _ManageExpenseScreenState extends State<ManageExpenseScreen> {
         }
       } else {
         await expenseProvider.updateExpense(newExpense);
-        // ตรวจสอบ mounted ก่อนแสดง SnackBar
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Expense updated successfully!')),
           );
         }
       }
-      // ตรวจสอบ mounted ก่อน pop
       if (mounted) Navigator.of(context).pop();
     } catch (error) {
       developer.log('Error saving expense: $error', name: 'ManageExpenseScreen', error: error);
-      // ตรวจสอบ mounted ก่อนแสดง SnackBar
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error saving expense: ${error.toString()}')),
@@ -205,9 +194,7 @@ class _ManageExpenseScreenState extends State<ManageExpenseScreen> {
     final categoryProvider = Provider.of<CategoryProvider>(context);
     final payerProvider = Provider.of<PayerProvider>(context);
 
-    // ตรวจสอบให้แน่ใจว่า Dropdown มีรายการให้เลือก
     if (categoryProvider.categories.isEmpty) {
-      // อาจแสดงข้อความหรือ Widget โหลดข้อมูล หรือให้ผู้ใช้เพิ่ม Category ก่อน
       return Scaffold(
         appBar: AppBar(title: Text(_editedExpense == null ? 'Add Expense' : 'Edit Expense')),
         body: const Center(
@@ -217,7 +204,6 @@ class _ManageExpenseScreenState extends State<ManageExpenseScreen> {
     }
 
     if (payerProvider.payers.isEmpty) {
-      // อาจแสดงข้อความหรือ Widget โหลดข้อมูล หรือให้ผู้ใช้เพิ่ม Payer ก่อน
       return Scaffold(
         appBar: AppBar(title: Text(_editedExpense == null ? 'Add Expense' : 'Edit Expense')),
         body: const Center(
@@ -281,7 +267,31 @@ class _ManageExpenseScreenState extends State<ManageExpenseScreen> {
                 ],
               ),
               const SizedBox(height: 20),
-              // Dropdown สำหรับเลือก Category
+              DropdownButtonFormField<String>(
+                value: _selectedPaymentType,
+                decoration: const InputDecoration(
+                  labelText: 'Payment Type',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'cash',
+                    child: Text('เงินสด'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'credit_card',
+                    child: Text('บัตรเครดิต'),
+                  ),
+                ],
+                onChanged: (String? newValue) {
+                  if (newValue != null) setState(() => _selectedPaymentType = newValue);
+                },
+                validator: (value) {
+                  if (value == null || value.isEmpty) return 'กรุณาเลือกประเภทการจ่าย';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 20),
               DropdownButtonFormField<Category>(
                 value: _selectedCategory,
                 decoration: const InputDecoration(
@@ -307,7 +317,6 @@ class _ManageExpenseScreenState extends State<ManageExpenseScreen> {
                 },
               ),
               const SizedBox(height: 20),
-              // Dropdown สำหรับเลือก Payer
               DropdownButtonFormField<Payer>(
                 value: _selectedPayer,
                 decoration: const InputDecoration(
@@ -331,6 +340,27 @@ class _ManageExpenseScreenState extends State<ManageExpenseScreen> {
                   }
                   return null;
                 },
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: _pickedImage == null
+                        ? const Text('No Image Attached')
+                        : Image.file(
+                      _pickedImage!,
+                      height: 100,
+                      width: 100,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton.icon(
+                    onPressed: _pickImage,
+                    icon: const Icon(Icons.camera_alt),
+                    label: const Text('Attach Photo'),
+                  ),
+                ],
               ),
             ],
           ),
