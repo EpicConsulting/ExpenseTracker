@@ -1,43 +1,55 @@
 import 'package:local_auth/local_auth.dart';
+import 'package:flutter/foundation.dart';
 
 class BiometricAuthService {
   final LocalAuthentication _auth = LocalAuthentication();
 
-  Future<bool> isBiometricSupported() async {
+  /// ตรวจว่า “พร้อม” จริงหรือไม่ (รองรับ + enroll แล้ว)
+  Future<bool> isBiometricAvailableAndEnrolled() async {
     try {
-      return await _auth.isDeviceSupported();
-    } catch (_) {
+      final supported = await _auth.isDeviceSupported();
+      final canCheck = await _auth.canCheckBiometrics;
+      final available = await _auth.getAvailableBiometrics();
+      debugPrint('[Biometric] supported=$supported canCheck=$canCheck list=$available');
+      return supported && canCheck && available.isNotEmpty;
+    } catch (e) {
+      debugPrint('[Biometric] availability check error: $e');
       return false;
     }
   }
 
-  Future<bool> canCheckBiometrics() async {
+  Future<List<BiometricType>> getAvailableBiometrics() async {
     try {
-      return await _auth.canCheckBiometrics;
-    } catch (_) {
-      return false;
+      return await _auth.getAvailableBiometrics();
+    } catch (e) {
+      debugPrint('[Biometric] getAvailableBiometrics error: $e');
+      return [];
     }
   }
 
-  Future<bool> authenticate({String reason = 'Please authenticate to continue'}) async {
+  Future<bool> authenticate({String reason = 'Please authenticate'}) async {
     try {
-      final bool didAuthenticate = await _auth.authenticate(
+      final didAuth = await _auth.authenticate(
         localizedReason: reason,
         options: const AuthenticationOptions(
-          biometricOnly: false, // หากต้องการเฉพาะไบโอเมตริกให้ตั้ง true
+          biometricOnly: true,      // ตั้ง true เพื่อบังคับ biometric เท่านั้น (ปรับได้)
           stickyAuth: true,
           useErrorDialogs: true,
         ),
       );
-      return didAuthenticate;
-    } catch (_) {
+      debugPrint('[Biometric] authenticate result=$didAuth');
+      return didAuth;
+    } catch (e) {
+      debugPrint('[Biometric] authenticate error: $e');
       return false;
     }
   }
 
-  Future<void> stopAuthentication() async {
+  Future<void> stop() async {
     try {
       await _auth.stopAuthentication();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[Biometric] stop error: $e');
+    }
   }
 }

@@ -8,12 +8,12 @@ import './screens/payer_screen.dart';
 import './screens/manage_payer_screen.dart';
 import './screens/payer_expenses_detail_screen.dart';
 import './screens/expense_detail_screen.dart';
-import './screens/lock_screen.dart'; // <--- เพิ่ม
+import './screens/lock_screen.dart';
 
 import './providers/category_provider.dart';
 import './providers/expense_provider.dart';
 import './providers/payer_provider.dart';
-import './providers/auth_provider.dart'; // <--- เพิ่ม
+import './providers/auth_provider.dart';
 
 import './models/expense.dart';
 
@@ -41,11 +41,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  // Lock แอพเมื่อกลับมาจาก background (optional)
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
-      // lock เมื่อออก
       final auth = _authProvider;
       auth?.lock();
     }
@@ -66,7 +64,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         ChangeNotifierProvider(create: (_) => CategoryProvider()),
         ChangeNotifierProvider(create: (_) => ExpenseProvider()),
         ChangeNotifierProvider(create: (_) => PayerProvider()),
-        ChangeNotifierProvider(create: (_) => AuthProvider()..init()), // <--- เพิ่ม
+        ChangeNotifierProvider(create: (_) => AuthProvider()..init()),
       ],
       child: Consumer<AuthProvider>(
         builder: (context, auth, _) {
@@ -77,20 +75,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               colorScheme: ColorScheme.fromSwatch(primarySwatch: Colors.blue).copyWith(
                 secondary: Colors.amber,
               ),
-              visualDensity: VisualDensity.adaptivePlatformDensity,
               appBarTheme: const AppBarTheme(
                 backgroundColor: Colors.blue,
                 foregroundColor: Colors.white,
               ),
-              elevatedButtonTheme: ElevatedButtonThemeData(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                ),
-              ),
             ),
-            // ถ้ายังไม่ปลดล็อค แสดง LockScreen
             home: auth.unlocked ? const MainScreen() : const LockScreen(),
+            // ไม่มี route '/' อีกต่อไป เพราะ MainScreen.routeName เปลี่ยนเป็น '/main'
             routes: {
               MainScreen.routeName: (ctx) => const MainScreen(),
               ReportScreen.routeName: (ctx) => const ReportScreen(),

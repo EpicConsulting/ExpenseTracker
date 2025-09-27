@@ -4,7 +4,6 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
 import 'dart:developer' as developer;
 
-import '../models/payer.dart';
 import '../providers/expense_provider.dart';
 import '../providers/payer_provider.dart';
 import '../widgets/app_drawer.dart';
@@ -12,7 +11,8 @@ import './expense_detail_screen.dart';
 import './payer_expenses_detail_screen.dart';
 
 class MainScreen extends StatefulWidget {
-  static const routeName = '/';
+  // ใช้ '/main' เพื่อไม่ชนกับกรณีมี home: ใน MaterialApp
+  static const routeName = '/main';
 
   const MainScreen({super.key});
 
@@ -23,65 +23,92 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
-  final CalendarFormat _calendarFormat = CalendarFormat.month; // Made final
+  final CalendarFormat _calendarFormat = CalendarFormat.month;
 
   Map<DateTime, List<dynamic>> _events = {};
+
+  // เก็บ reference ของ provider เพื่อไม่ lookup context ใน dispose()
+  late final ExpenseProvider _expenseProvider;
+  late final PayerProvider _payerProvider;
+
+  bool _initialFetched = false;
 
   @override
   void initState() {
     super.initState();
     _selectedDay = _focusedDay;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      Provider.of<ExpenseProvider>(context, listen: false).fetchExpenses();
-      Provider.of<PayerProvider>(context, listen: false).fetchPayers();
-    });
 
-    _loadExpensesForCalendar();
-    Provider.of<ExpenseProvider>(context, listen: false).addListener(_onExpenseChange);
+    // ดึง provider แบบ listen: false ได้ใน initState
+    _expenseProvider = Provider.of<ExpenseProvider>(context, listen: false);
+    _payerProvider = Provider.of<PayerProvider>(context, listen: false);
+
+    // ฟังการเปลี่ยนแปลงเฉพาะ expenses เพื่อ refresh calendar dots
+    _expenseProvider.addListener(_onExpenseChange);
+
+    // ทำ fetch หลัง frame แรกเพื่อหลีกเลี่ยง build context issue
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await Future.wait([
+        _expenseProvider.fetchExpenses(),
+        _payerProvider.fetchPayers(),
+      ]);
+      if (!mounted) return;
+      await _loadExpensesForCalendar();
+      if (mounted) {
+        setState(() {
+          _initialFetched = true;
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
-    Provider.of<ExpenseProvider>(context, listen: false).removeListener(_onExpenseChange);
+    // ใช้ reference ที่ cache ไว้ ไม่เรียก Provider.of()
+    _expenseProvider.removeListener(_onExpenseChange);
     super.dispose();
   }
 
   void _onExpenseChange() {
+    // เรียกซ้ำเมื่อรายการ expenses เปลี่ยน
     _loadExpensesForCalendar();
   }
 
   Future<void> _loadExpensesForCalendar() async {
-    // Only use context if mounted
-    if (!mounted) {
-      developer.log('MainScreen: _loadExpensesForCalendar called but not mounted', name: 'MainScreen');
-      return;
-    }
+    if (!mounted) return;
+    try {
+      final datesWithExpenses = await _expenseProvider.getDatesWithExpensesForMonth(
+        _focusedDay.year,
+        _focusedDay.month,
+      );
 
-    final expenseProvider = Provider.of<ExpenseProvider>(context, listen: false);
-    final datesWithExpenses = await expenseProvider.getDatesWithExpensesForMonth(
-      _focusedDay.year,
-      _focusedDay.month,
-    );
-
-    final newEvents = <DateTime, List<dynamic>>{};
-    for (var dateString in datesWithExpenses) {
-      if (dateString['expenseDay'] != null) {
-        final DateTime date = DateTime.parse(dateString['expenseDay']!);
-        newEvents[date] = ['expense'];
+      final newEvents = <DateTime, List<dynamic>>{};
+      for (final row in datesWithExpenses) {
+        final raw = row['expenseDay'];
+        if (raw is String && raw.isNotEmpty) {
+          final date = DateTime.parse(raw);
+            newEvents[DateTime(date.year, date.month, date.day)] = ['expense'];
+        }
       }
-    }
 
-    if (mounted) {
-      setState(() {
-        _events = newEvents;
-      });
+      if (mounted) {
+        setState(() {
+          _events = newEvents;
+        });
+      }
+    } catch (e, st) {
+      developer.log(
+        'Error loading calendar events: $e',
+        name: 'MainScreen',
+        error: e,
+        stackTrace: st,
+      );
     }
   }
 
   List<dynamic> _getEventsForDay(DateTime day) {
-    final pureDay = DateTime(day.year, day.month, day.day);
-    return _events[pureDay] ?? [];
+    final key = DateTime(day.year, day.month, day.day);
+    return _events[key] ?? [];
   }
 
   void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
@@ -100,54 +127,47 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final expenseProvider = Provider.of<ExpenseProvider>(context);
-    final payerProvider = Provider.of<PayerProvider>(context);
+    // ใช้ watch เพื่อ rebuild ส่วนที่ต้องแสดงรายการ
+    final expenseProviderWatch = context.watch<ExpenseProvider>();
+    final payerProviderWatch = context.watch<PayerProvider>();
 
-    // Filter expenses for the selected day
-    final expensesOnSelectedDay = _selectedDay != null
-        ? expenseProvider.expenses.where((exp) =>
+    // กรอง expenses ต่อวัน
+    final expensesOnSelectedDay = _selectedDay == null
+        ? <dynamic>[]
+        : expenseProviderWatch.expenses.where((exp) =>
             exp.date.year == _selectedDay!.year &&
             exp.date.month == _selectedDay!.month &&
-            exp.date.day == _selectedDay!.day
-          ).toList()
-        : [];
+            exp.date.day == _selectedDay!.day).toList();
 
-    // Calculate totals per payer
-    Map<int, double> payerTotals = {};
-    Map<int, Payer> payerMap = {for (var p in payerProvider.payers) p.id!: p};
+    // รวมยอดต่อ payer
+    final payerTotals = <int, double>{};
+    final payerMap = {for (var p in payerProviderWatch.payers) p.id!: p};
 
-    for (var expense in expensesOnSelectedDay) {
-      if (expense.payerId != null) {
-        payerTotals.update(
-          expense.payerId!,
-          (value) => value + expense.amount,
-          ifAbsent: () => expense.amount,
-        );
+    for (final exp in expensesOnSelectedDay) {
+      final pid = exp.payerId;
+      if (pid != null) {
+        payerTotals.update(pid, (v) => v + exp.amount, ifAbsent: () => exp.amount);
       }
     }
 
-    // Convert Map to List of PayerSummary for display
-    List<PayerSummary> payerSummaries = payerTotals.entries.map((entry) {
-      final payer = payerMap[entry.key];
-      return PayerSummary(
-        payerId: entry.key,
-        payerName: payer?.name ?? 'Unknown Payer',
-        totalAmount: entry.value,
-      );
-    }).toList();
-
-    payerSummaries.sort((a, b) => b.totalAmount.compareTo(a.totalAmount));
+    final payerSummaries = payerTotals.entries
+        .map((e) => PayerSummary(
+              payerId: e.key,
+              payerName: payerMap[e.key]?.name ?? 'Unknown Payer',
+              totalAmount: e.value,
+            ))
+        .toList()
+      ..sort((a, b) => b.totalAmount.compareTo(a.totalAmount));
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Expense Tracker'),
-      ),
+      appBar: AppBar(title: const Text('Expense Tracker')),
       drawer: const AppDrawer(),
       body: Column(
         children: [
+          // Calendar
           TableCalendar(
             firstDay: DateTime.utc(2020, 1, 1),
-            lastDay: DateTime.utc(2030, 12, 31),
+            lastDay: DateTime.utc(2035, 12, 31),
             focusedDay: _focusedDay,
             selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
             calendarFormat: _calendarFormat,
@@ -165,109 +185,109 @@ class _MainScreenState extends State<MainScreen> {
             ),
             calendarBuilders: CalendarBuilders(
               defaultBuilder: (context, day, focusedDay) {
-                final bool hasEvents = _events[DateTime(day.year, day.month, day.day)] != null &&
-                    _events[DateTime(day.year, day.month, day.day)]!.isNotEmpty;
-
+                final has = _getEventsForDay(day).isNotEmpty;
                 return Center(
                   child: Text(
                     '${day.day}',
                     style: TextStyle(
-                      color: hasEvents ? Colors.green[800] : Colors.black,
-                      fontWeight: hasEvents ? FontWeight.bold : FontWeight.normal,
+                      color: has ? Colors.green[800] : Colors.black,
+                      fontWeight: has ? FontWeight.bold : FontWeight.normal,
                     ),
                   ),
                 );
               },
               todayBuilder: (context, day, focusedDay) {
-                final bool hasEvents = _events[DateTime(day.year, day.month, day.day)] != null &&
-                    _events[DateTime(day.year, day.month, day.day)]!.isNotEmpty;
+                final has = _getEventsForDay(day).isNotEmpty;
                 return Container(
-                  margin: const EdgeInsets.all(6.0),
+                  margin: const EdgeInsets.all(6),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: hasEvents ? Colors.green[600] : Theme.of(context).primaryColor,
+                    color: has ? Colors.green[600] : Theme.of(context).primaryColor,
                     shape: BoxShape.circle,
                   ),
                   child: Text(
                     '${day.day}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                   ),
                 );
               },
               selectedBuilder: (context, day, focusedDay) {
-                final bool hasEvents = _events[DateTime(day.year, day.month, day.day)] != null &&
-                    _events[DateTime(day.year, day.month, day.day)]!.isNotEmpty;
+                final has = _getEventsForDay(day).isNotEmpty;
                 return Container(
-                  margin: const EdgeInsets.all(6.0),
+                  margin: const EdgeInsets.all(6),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: hasEvents ? Colors.green[400] : Theme.of(context).colorScheme.secondary,
+                    color: has ? Colors.green[400] : Theme.of(context).colorScheme.secondary,
                     shape: BoxShape.circle,
                   ),
                   child: Text(
                     '${day.day}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                   ),
                 );
               },
             ),
           ),
-          const SizedBox(height: 16.0),
+          const SizedBox(height: 16),
+          // Title
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Text(
-              _selectedDay != null
-                  ? 'Expenses by Payer for ${DateFormat('dd MMMM yyyy').format(_selectedDay!)}:'
-                  : 'Select a day to view expenses.',
-              style: Theme.of(context).textTheme.titleLarge,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                _selectedDay == null
+                    ? 'Select a day to view expenses.'
+                    : 'Expenses by Payer for ${DateFormat('dd MMMM yyyy').format(_selectedDay!)}:',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
             ),
           ),
+          // List
           Expanded(
-            child: payerSummaries.isEmpty
-                ? const Center(
-                    child: Text('No expenses recorded for this day.'),
-                  )
-                : ListView.builder(
-                    itemCount: payerSummaries.length,
-                    itemBuilder: (ctx, index) {
-                      final summary = payerSummaries[index];
-                      return Card(
-                        margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 16),
-                        child: ListTile(
-                          title: Text(summary.payerName),
-                          trailing: Text('${summary.totalAmount.toStringAsFixed(2)} ฿'),
-                          onTap: () {
-                            Navigator.of(context).pushNamed(
-                              PayerExpensesDetailScreen.routeName,
-                              arguments: {
-                                'selectedDay': _selectedDay,
-                                'payerId': summary.payerId,
-                                'payerName': summary.payerName,
+            child: !_initialFetched
+                ? const Center(child: CircularProgressIndicator())
+                : payerSummaries.isEmpty
+                    ? const Center(child: Text('No expenses recorded for this day.'))
+                    : ListView.builder(
+                        itemCount: payerSummaries.length,
+                        itemBuilder: (ctx, i) {
+                          final s = payerSummaries[i];
+                          return Card(
+                            margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 16),
+                            child: ListTile(
+                              title: Text(s.payerName),
+                              trailing: Text('${s.totalAmount.toStringAsFixed(2)} ฿'),
+                              onTap: () {
+                                if (_selectedDay == null) return;
+                                Navigator.of(context).pushNamed(
+                                  PayerExpensesDetailScreen.routeName,
+                                  arguments: {
+                                    'selectedDay': _selectedDay,
+                                    'payerId': s.payerId,
+                                    'payerName': s.payerName,
+                                  },
+                                );
                               },
-                            );
-                          },
-                        ),
-                      );
-                    },
-                  ),
+                            ),
+                          );
+                        },
+                      ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          final expenseProvider = Provider.of<ExpenseProvider>(context, listen: false);
-          Navigator.of(context).pushNamed(
+          Navigator.of(context)
+              .pushNamed(
             ExpenseDetailScreen.routeName,
-            arguments: {'selectedDate': _selectedDay ?? DateTime.now(), 'existingExpense': null},
-          ).then((_) {
+            arguments: {
+              'selectedDate': _selectedDay ?? DateTime.now(),
+              'existingExpense': null,
+            },
+          )
+              .then((_) {
             if (!mounted) return;
-            expenseProvider.fetchExpenses();
+            _expenseProvider.fetchExpenses();
           });
         },
         child: const Icon(Icons.add),
@@ -276,12 +296,10 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-// Class สำหรับเก็บข้อมูลสรุปของผู้จ่าย
 class PayerSummary {
   final int payerId;
   final String payerName;
   final double totalAmount;
-
   PayerSummary({
     required this.payerId,
     required this.payerName,
