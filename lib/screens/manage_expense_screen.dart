@@ -254,7 +254,7 @@ class _ManageExpenseScreenState extends State<ManageExpenseScreen> {
                     child: Text(
                       _selectedDate == null
                           ? 'No Date Chosen!'
-                          : 'Picked Date: ${DateFormat('dd/MM/yyyy').format(_selectedDate!)}',
+                          : 'Date: ${DateFormat('dd/MM/yyyy').format(_selectedDate!)}',
                     ),
                   ),
                   TextButton(

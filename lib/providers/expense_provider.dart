@@ -103,7 +103,7 @@ class ExpenseProvider with ChangeNotifier {
           e.${DatabaseHelper.expenseDescription} AS description,
           e.${DatabaseHelper.expenseImage} AS imagePath,
           e.${DatabaseHelper.expensePayerId} AS payerId,
-          e.${DatabaseHelper.expensePaymentType} AS paymentType,        // <-- ADDED!
+          e.${DatabaseHelper.expensePaymentType} AS paymentType,
           c.${DatabaseHelper.categoryName} AS categoryName,
           p.${DatabaseHelper.payerName} AS payerName
         FROM ${DatabaseHelper.expenseTable} AS e

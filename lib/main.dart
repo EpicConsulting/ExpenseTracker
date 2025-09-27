@@ -4,24 +4,61 @@ import 'package:provider/provider.dart';
 import './screens/main_screen.dart';
 import './screens/report_screen.dart';
 import './screens/category_screen.dart';
-// import './screens/manage_expense_screen.dart'; // <--- ลบบรรทัดนี้ออก
 import './screens/payer_screen.dart';
 import './screens/manage_payer_screen.dart';
 import './screens/payer_expenses_detail_screen.dart';
-import './screens/expense_detail_screen.dart'; // <--- !!! ต้อง import ไฟล์นี้
+import './screens/expense_detail_screen.dart';
+import './screens/lock_screen.dart'; // <--- เพิ่ม
 
 import './providers/category_provider.dart';
 import './providers/expense_provider.dart';
 import './providers/payer_provider.dart';
+import './providers/auth_provider.dart'; // <--- เพิ่ม
 
-import './models/expense.dart'; // <--- เพิ่ม import นี้ เพื่อให้รู้จัก Expense ใน routes
+import './models/expense.dart';
 
 void main() {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Lock แอพเมื่อกลับมาจาก background (optional)
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      // lock เมื่อออก
+      final auth = _authProvider;
+      auth?.lock();
+    }
+  }
+
+  AuthProvider? get _authProvider {
+    try {
+      return Provider.of<AuthProvider>(context, listen: false);
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -29,45 +66,48 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => CategoryProvider()),
         ChangeNotifierProvider(create: (_) => ExpenseProvider()),
         ChangeNotifierProvider(create: (_) => PayerProvider()),
+        ChangeNotifierProvider(create: (_) => AuthProvider()..init()), // <--- เพิ่ม
       ],
-      child: MaterialApp(
-        title: 'Expense Tracker',
-        theme: ThemeData(
-          primarySwatch: Colors.blue,
-          colorScheme: ColorScheme.fromSwatch(primarySwatch: Colors.blue).copyWith(
-            secondary: Colors.amber, // สีรองสำหรับเน้นบางจุด
-          ),
-          visualDensity: VisualDensity.adaptivePlatformDensity,
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Colors.blue, // สี AppBar
-            foregroundColor: Colors.white, // สีไอคอนและตัวอักษรใน AppBar
-          ),
-
-          elevatedButtonTheme: ElevatedButtonThemeData(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue, // สีพื้นหลังปุ่ม
-              foregroundColor: Colors.white, // สีข้อความปุ่ม
+      child: Consumer<AuthProvider>(
+        builder: (context, auth, _) {
+          return MaterialApp(
+            title: 'Expense Tracker',
+            theme: ThemeData(
+              primarySwatch: Colors.blue,
+              colorScheme: ColorScheme.fromSwatch(primarySwatch: Colors.blue).copyWith(
+                secondary: Colors.amber,
+              ),
+              visualDensity: VisualDensity.adaptivePlatformDensity,
+              appBarTheme: const AppBarTheme(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+              elevatedButtonTheme: ElevatedButtonThemeData(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                ),
+              ),
             ),
-          ),
-        ),
-
-        initialRoute: MainScreen.routeName, // กำหนดหน้าแรกโดยใช้ชื่อ Route
-        routes: {
-          MainScreen.routeName: (ctx) => const MainScreen(),
-          ReportScreen.routeName: (ctx) => const ReportScreen(),
-          CategoryScreen.routeName: (ctx) => const CategoryScreen(),
-          // ManageExpenseScreen.routeName: (ctx) => const ManageExpenseScreen(), // <--- ลบบรรทัดนี้ออก
-          // เพิ่ม ExpenseDetailScreen.routeName และจัดการ arguments ที่ส่งมา
-          ExpenseDetailScreen.routeName: (ctx) {
-            final args = ModalRoute.of(ctx)!.settings.arguments as Map<String, dynamic>?;
-            return ExpenseDetailScreen(
-              selectedDate: args?['selectedDate'] as DateTime? ?? DateTime.now(),
-              existingExpense: args?['existingExpense'] as Expense?,
-            );
-          },
-          PayerScreen.routeName: (ctx) => const PayerScreen(),
-          ManagePayerScreen.routeName: (ctx) => const ManagePayerScreen(),
-          PayerExpensesDetailScreen.routeName: (ctx) => const PayerExpensesDetailScreen(),
+            // ถ้ายังไม่ปลดล็อค แสดง LockScreen
+            home: auth.unlocked ? const MainScreen() : const LockScreen(),
+            routes: {
+              MainScreen.routeName: (ctx) => const MainScreen(),
+              ReportScreen.routeName: (ctx) => const ReportScreen(),
+              CategoryScreen.routeName: (ctx) => const CategoryScreen(),
+              ExpenseDetailScreen.routeName: (ctx) {
+                final args = ModalRoute.of(ctx)!.settings.arguments as Map<String, dynamic>?;
+                return ExpenseDetailScreen(
+                  selectedDate: args?['selectedDate'] as DateTime? ?? DateTime.now(),
+                  existingExpense: args?['existingExpense'] as Expense?,
+                );
+              },
+              PayerScreen.routeName: (ctx) => const PayerScreen(),
+              ManagePayerScreen.routeName: (ctx) => const ManagePayerScreen(),
+              PayerExpensesDetailScreen.routeName: (ctx) =>
+                  const PayerExpensesDetailScreen(),
+            },
+          );
         },
       ),
     );
