@@ -10,25 +10,17 @@ class LockScreen extends StatefulWidget {
 }
 
 class _LockScreenState extends State<LockScreen> {
-  String? _error;
+  late final AuthProvider _authProvider;
 
   @override
   void initState() {
     super.initState();
-    // ลอง auth หลัง frame (ถ้า biometricAvailable จะ popup)
-    WidgetsBinding.instance.addPostFrameCallback((_) => _attempt());
-  }
-
-  Future<void> _attempt() async {
-    final auth = context.read<AuthProvider>();
-    if (!auth.biometricAvailable) return; // รอให้ user เห็น UI
-    final ok = await auth.unlock();
-    if (!mounted) return;
-    if (!ok) {
-      setState(() {
-        _error = 'Authentication failed. Try again.';
-      });
-    }
+    _authProvider = context.read<AuthProvider>();
+    // เลื่อนไปหลังเฟรมแรกเพื่อเลี่ยง notifyListeners ระหว่าง build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _authProvider.init();
+    });
   }
 
   @override
@@ -36,57 +28,73 @@ class _LockScreenState extends State<LockScreen> {
     final auth = context.watch<AuthProvider>();
 
     if (auth.unlocked) {
-      // ปล่อยให้ MaterialApp rebuild ไปยังหน้าหลัก (home: ...)
       return const SizedBox.shrink();
     }
+
+    final status = auth.status;
+    final enrolled = status?.enrolled == true;
+    final supported = status?.supported == true;
 
     return Scaffold(
       body: SafeArea(
         child: Center(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 28.0),
+            padding: const EdgeInsets.symmetric(horizontal: 28),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  auth.biometricAvailable ? Icons.fingerprint : Icons.lock_outline,
+                  enrolled ? Icons.fingerprint : Icons.lock_outline,
                   size: 110,
                   color: Theme.of(context).colorScheme.primary,
                 ),
                 const SizedBox(height: 24),
-                Text(
-                  auth.biometricAvailable
-                      ? 'Biometric Authentication Required'
-                      : 'No biometric enrolled / not supported.\nPlease enroll or tap Skip (Dev).',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                if (_error != null) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    _error!,
-                    style: const TextStyle(color: Colors.red),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-                const SizedBox(height: 32),
-                if (auth.biometricAvailable)
-                  ElevatedButton.icon(
-                    onPressed: auth.authInProgress ? null : _attempt,
-                    icon: const Icon(Icons.fingerprint),
-                    label: Text(auth.authInProgress ? 'Authenticating...' : 'Authenticate'),
-                  )
+                if (auth.checking)
+                  const CircularProgressIndicator()
                 else
-                  OutlinedButton(
-                    onPressed: () => auth.recheck(),
-                    child: const Text('Re-check Biometrics'),
+                  Column(
+                    children: [
+                      Text(
+                        enrolled
+                            ? 'Biometric Authentication Required'
+                            : supported
+                                ? 'No biometric enrolled.\nPlease add a fingerprint or use device credential.'
+                                : 'Device does not support biometrics.',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      if (auth.lastError != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          auth.lastError!,
+                          style: const TextStyle(color: Colors.red),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                      const SizedBox(height: 28),
+                      if (enrolled)
+                        ElevatedButton.icon(
+                          onPressed: () => auth.authenticate(allowDeviceCredential: true),
+                          icon: const Icon(Icons.fingerprint),
+                          label: const Text('Authenticate'),
+                        )
+                      else if (supported)
+                        ElevatedButton(
+                          onPressed: () => auth.refreshStatus(),
+                          child: const Text('Re-check after enroll'),
+                        )
+                      else
+                        ElevatedButton(
+                          onPressed: () => auth.devBypass(),
+                          child: const Text('Continue (Dev Only)'),
+                        ),
+                      const SizedBox(height: 12),
+                      TextButton(
+                        onPressed: () => auth.devBypass(),
+                        child: const Text('[DEV] Skip Authentication'),
+                      ),
+                    ],
                   ),
-                const SizedBox(height: 12),
-                // ปุ่ม Bypass เฉพาะ DEV – เอาออกใน Production
-                TextButton(
-                  onPressed: () => context.read<AuthProvider>().devBypass(),
-                  child: const Text('[DEV] Skip Authentication'),
-                ),
               ],
             ),
           ),

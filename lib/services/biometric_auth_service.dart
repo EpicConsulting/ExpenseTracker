@@ -4,43 +4,64 @@ import 'package:flutter/foundation.dart';
 class BiometricAuthService {
   final LocalAuthentication _auth = LocalAuthentication();
 
-  /// ตรวจว่า “พร้อม” จริงหรือไม่ (รองรับ + enroll แล้ว)
-  Future<bool> isBiometricAvailableAndEnrolled() async {
+  Future<BiometricStatus> checkStatus() async {
     try {
       final supported = await _auth.isDeviceSupported();
       final canCheck = await _auth.canCheckBiometrics;
       final available = await _auth.getAvailableBiometrics();
-      debugPrint('[Biometric] supported=$supported canCheck=$canCheck list=$available');
-      return supported && canCheck && available.isNotEmpty;
+      debugPrint('[Biometric] supported=$supported canCheck=$canCheck available=$available');
+      if (!supported) {
+        return BiometricStatus(
+          supported: false,
+          enrolled: false,
+          availableTypes: available,
+          reason: 'Device not supported',
+        );
+      }
+      if (available.isEmpty) {
+        return BiometricStatus(
+          supported: true,
+            enrolled: false,
+          availableTypes: available,
+          reason: 'No biometrics enrolled',
+        );
+      }
+      return BiometricStatus(
+        supported: true,
+        enrolled: true,
+        availableTypes: available,
+        reason: 'OK',
+      );
     } catch (e) {
-      debugPrint('[Biometric] availability check error: $e');
-      return false;
+      debugPrint('[Biometric] checkStatus error: $e');
+      return BiometricStatus(
+        supported: false,
+        enrolled: false,
+        availableTypes: const [],
+        reason: 'Error: $e',
+      );
     }
   }
 
-  Future<List<BiometricType>> getAvailableBiometrics() async {
+  Future<bool> authenticate({
+    String reason = 'Authenticate to continue',
+    bool allowDeviceCredential = true,
+  }) async {
     try {
-      return await _auth.getAvailableBiometrics();
-    } catch (e) {
-      debugPrint('[Biometric] getAvailableBiometrics error: $e');
-      return [];
-    }
-  }
-
-  Future<bool> authenticate({String reason = 'Please authenticate'}) async {
-    try {
-      final didAuth = await _auth.authenticate(
+      // ถ้า allowDeviceCredential = true → ตั้ง biometricOnly=false (ให้ fallback เป็น PIN/Pattern ได้)
+      final result = await _auth.authenticate(
         localizedReason: reason,
-        options: const AuthenticationOptions(
-          biometricOnly: true,      // ตั้ง true เพื่อบังคับ biometric เท่านั้น (ปรับได้)
+        options: AuthenticationOptions(
+          biometricOnly: !allowDeviceCredential,
           stickyAuth: true,
           useErrorDialogs: true,
+          sensitiveTransaction: false,
         ),
       );
-      debugPrint('[Biometric] authenticate result=$didAuth');
-      return didAuth;
+      debugPrint('[Biometric] authenticate result=$result');
+      return result;
     } catch (e) {
-      debugPrint('[Biometric] authenticate error: $e');
+      debugPrint('[Biometric] authenticate exception: $e');
       return false;
     }
   }
@@ -52,4 +73,17 @@ class BiometricAuthService {
       debugPrint('[Biometric] stop error: $e');
     }
   }
+}
+
+class BiometricStatus {
+  final bool supported;
+  final bool enrolled;
+  final List<BiometricType> availableTypes;
+  final String reason;
+  BiometricStatus({
+    required this.supported,
+    required this.enrolled,
+    required this.availableTypes,
+    required this.reason,
+  });
 }

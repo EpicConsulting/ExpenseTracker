@@ -5,44 +5,63 @@ class AuthProvider with ChangeNotifier {
   final BiometricAuthService _bio = BiometricAuthService();
 
   bool _unlocked = false;
-  bool _biometricAvailable = false;
-  bool _authInProgress = false;
+  bool _checking = false;
+  BiometricStatus? _status;
+  String? _lastError;
+
+  bool _initializing = false;
+  bool _initialized = false;
 
   bool get unlocked => _unlocked;
-  bool get biometricAvailable => _biometricAvailable;
-  bool get authInProgress => _authInProgress;
+  bool get checking => _checking;
+  BiometricStatus? get status => _status;
+  String? get lastError => _lastError;
 
-  /// เรียกครั้งแรกตอนเริ่มแอป
   Future<void> init() async {
-    _biometricAvailable = await _bio.isBiometricAvailableAndEnrolled();
-    debugPrint('[AuthProvider] biometricAvailable=$_biometricAvailable');
+    if (_initializing || _initialized) return;
+    _initializing = true;
+    _checking = true;
+    notifyListeners();
+    try {
+      _status = await _bio.checkStatus();
+      _initialized = true;
+    } catch (e) {
+      _lastError = 'Init error: $e';
+    } finally {
+      _checking = false;
+      _initializing = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> refreshStatus() async {
+    _status = await _bio.checkStatus();
     notifyListeners();
   }
 
-  /// พยายามปลดล็อค
-  Future<bool> unlock({String reason = 'Authenticate to access Expense Tracker'}) async {
-    if (_unlocked) return true;
-
-    if (!_biometricAvailable) {
-      // ไม่ปลดล็อคอัตโนมัติอีกต่อไป ให้ผู้ใช้ตัดสินใจ (เช่น ปุ่ม Skip ใน LockScreen)
-      debugPrint('[AuthProvider] Biometrics not available/enrolled. Waiting user action.');
+  Future<bool> authenticate({bool allowDeviceCredential = true}) async {
+    if (!_initialized && !_initializing) {
+      await init();
+    }
+    if (_status != null && (!_status!.supported || !_status!.enrolled)) {
+      _lastError = 'Biometric not available or not enrolled.';
+      notifyListeners();
       return false;
     }
-
-    if (_authInProgress) return false;
-    _authInProgress = true;
-    notifyListeners();
-
-    final ok = await _bio.authenticate(reason: reason);
-    _authInProgress = false;
+    final ok = await _bio.authenticate(
+      reason: 'Please authenticate to access your expenses',
+      allowDeviceCredential: allowDeviceCredential,
+    );
     if (ok) {
       _unlocked = true;
+      _lastError = null;
+    } else {
+      _lastError = 'Authentication failed.';
     }
     notifyListeners();
     return ok;
   }
 
-  /// ข้าม (สำหรับ DEV หรือ fallback) — ใช้เฉพาะระหว่างพัฒนา
   void devBypass() {
     _unlocked = true;
     notifyListeners();
@@ -50,11 +69,6 @@ class AuthProvider with ChangeNotifier {
 
   void lock() {
     _unlocked = false;
-    notifyListeners();
-  }
-
-  Future<void> recheck() async {
-    _biometricAvailable = await _bio.isBiometricAvailableAndEnrolled();
     notifyListeners();
   }
 }

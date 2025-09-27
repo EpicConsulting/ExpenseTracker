@@ -37,11 +37,11 @@ dependencies:
   # สำหรับจัดการ Format วันที่และสกุลเงิน
   table_calendar: ^3.2.0
   # สำหรับ Calendar
-  image_picker: ^1.1.2
+  image_picker: ^1.2.0
   # สำหรับเลือกรูปภาพ
   fl_chart: ^1.0.0
   # สำหรับ Bar Chart
-  provider: ^6.1.2
+  provider: ^6.1.5+1
   uuid: ^4.3.3
   # สำหรับ State Management
 
@@ -49,7 +49,7 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   flutter_colorpicker: ^1.0.3
-  local_auth: ^2.2.0            # <--- เพิ่ม
+  local_auth: ^2.3.0            # <--- เพิ่ม
   flutter_secure_storage: ^9.0.0 # (ถ้าจะใช้เก็บ PIN ภายหลัง)  
 
 dev_dependencies:

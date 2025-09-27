@@ -44,8 +44,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
-      final auth = _authProvider;
-      auth?.lock();
+      _authProvider?.lock();
     }
   }
 
@@ -64,7 +63,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         ChangeNotifierProvider(create: (_) => CategoryProvider()),
         ChangeNotifierProvider(create: (_) => ExpenseProvider()),
         ChangeNotifierProvider(create: (_) => PayerProvider()),
-        ChangeNotifierProvider(create: (_) => AuthProvider()..init()),
+        // ลบ ..init() ออก ให้ LockScreen เป็นคนเรียกหลัง build
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
       ],
       child: Consumer<AuthProvider>(
         builder: (context, auth, _) {
@@ -81,7 +81,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               ),
             ),
             home: auth.unlocked ? const MainScreen() : const LockScreen(),
-            // ไม่มี route '/' อีกต่อไป เพราะ MainScreen.routeName เปลี่ยนเป็น '/main'
             routes: {
               MainScreen.routeName: (ctx) => const MainScreen(),
               ReportScreen.routeName: (ctx) => const ReportScreen(),
@@ -95,8 +94,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               },
               PayerScreen.routeName: (ctx) => const PayerScreen(),
               ManagePayerScreen.routeName: (ctx) => const ManagePayerScreen(),
-              PayerExpensesDetailScreen.routeName: (ctx) =>
-                  const PayerExpensesDetailScreen(),
+              PayerExpensesDetailScreen.routeName: (ctx) => const PayerExpensesDetailScreen(),
             },
           );
         },
