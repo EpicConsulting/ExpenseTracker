@@ -2,9 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart'; // สำหรับจัดรูปแบบวันที่
-import 'dart:developer' as developer; // สำหรับ logging
 
-import '../models/expense.dart';
 import '../providers/expense_provider.dart';
 import '../widgets/app_drawer.dart'; // ตรวจสอบให้แน่ใจว่า app_drawer.dart มีอยู่และอยู่ใน path ที่ถูกต้อง
 import './expense_detail_screen.dart'; // สำหรับการนำทางไปเพิ่ม/แก้ไขค่าใช้จ่าย

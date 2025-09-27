@@ -4,8 +4,6 @@ import 'dart:developer' as developer;
 
 import '../models/expense.dart';
 import '../services/database_helper.dart';
-import '../models/category.dart';
-import '../models/payer.dart';
 
 class ExpenseProvider with ChangeNotifier {
   List<Expense> _expenses = [];

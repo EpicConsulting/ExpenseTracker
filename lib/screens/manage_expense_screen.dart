@@ -9,6 +9,7 @@ import '../models/payer.dart';
 import '../providers/expense_provider.dart';
 import '../providers/category_provider.dart';
 import '../providers/payer_provider.dart';
+import '../utils/extensions.dart';
 
 class ManageExpenseScreen extends StatefulWidget {
   static const routeName = '/manage-expense';
@@ -336,15 +337,5 @@ class _ManageExpenseScreenState extends State<ManageExpenseScreen> {
         ),
       ),
     );
-  }
-}
-
-// Extension เพื่อช่วยในการหา Element ใน List
-extension IterableExtension<T> on Iterable<T> {
-  T? firstWhereOrNull(bool Function(T) test) {
-    for (var element in this) {
-      if (test(element)) return element;
-    }
-    return null;
   }
 }

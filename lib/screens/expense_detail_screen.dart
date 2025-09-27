@@ -14,6 +14,8 @@ import '../providers/category_provider.dart';
 import '../providers/expense_provider.dart';
 import '../providers/payer_provider.dart'; // Import PayerProvider
 
+import '../utils/extensions.dart';
+
 class ExpenseDetailScreen extends StatefulWidget {
   static const routeName = '/expense-detail';
   final DateTime selectedDate; // วันที่เริ่มต้นสำหรับการเพิ่มค่าใช้จ่ายใหม่
@@ -391,15 +393,5 @@ class _ExpenseDetailScreenState extends State<ExpenseDetailScreen> {
         ),
       ),
     );
-  }
-}
-
-// Extension เพื่อช่วยในการหา Element ใน List (คัดลอกมาจาก ManageExpenseScreen)
-extension IterableExtension<T> on Iterable<T> {
-  T? firstWhereOrNull(bool Function(T) test) {
-    for (var element in this) {
-      if (test(element)) return element;
-    }
-    return null;
   }
 }
