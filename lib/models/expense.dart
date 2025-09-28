@@ -25,16 +25,16 @@ class Expense {
 
   factory Expense.fromMap(Map<String, dynamic> map) {
     return Expense(
-      id: map['id'] as int?, // ใช้ as int?
-      amount: map['amount'] as double, // ใช้ as double
-      date: DateTime.parse(map['date'] as String), // ใช้ as String
-      categoryId: map['categoryId'] as int?, // ใช้ as int?
-      description: map['description'] as String, // ใช้ as String
-      imagePath: map['imagePath'] as String?, // ใช้ as String?
-      payerId: map['payerId'] as int?, // ใช้ as int?
-      payerName: map['payerName'] as String?, // ใช้ as String?
-      categoryName: map['categoryName'] as String?, // ใช้ as String?
-      paymentType: map['paymentType'] as String, // ใช้ as String
+      id: map['id'] as int?,
+      amount: (map['amount'] as num).toDouble(),  // <-- แก้ตรงนี้
+      date: DateTime.parse(map['date'] as String),
+      categoryId: map['categoryId'] as int?,
+      description: map['description'] as String,
+      imagePath: map['imagePath'] as String?,
+      payerId: map['payerId'] as int?,
+      payerName: map['payerName'] as String?,
+      categoryName: map['categoryName'] as String?,
+      paymentType: map['paymentType'] as String,
     );
   }
 

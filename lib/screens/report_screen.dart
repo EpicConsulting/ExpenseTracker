@@ -215,8 +215,9 @@ class _ReportScreenState extends State<ReportScreen> {
           ),
         );
         final pct = (entry.value / total) * 100;
-        final sectionColor =
-            category.color != null ? Color(category.color!) : _getCategoryColor(category.id!);
+        final sectionColor = (category.color == null || category.color == 0)
+            ? _getCategoryColor(category.id!)
+            : Color(category.color!);
         tempPieSections.add(
           PieChartSectionData(
             color: sectionColor,
@@ -609,9 +610,9 @@ class _ReportScreenState extends State<ReportScreen> {
                     color: 0xFF9E9E9E,
                   ),
                 );
-                final legendColor = category.color != null
-                    ? Color(category.color!)
-                    : _getCategoryColor(category.id!);
+                final legendColor = (category.color == null || category.color == 0)
+                    ? _getCategoryColor(category.id!)
+                    : Color(category.color!);
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
                   child: Row(
