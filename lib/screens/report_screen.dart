@@ -40,6 +40,13 @@ class _ReportScreenState extends State<ReportScreen> {
   double _maxYValue = 0;
   double _totalPeriodExpenses = 0;
 
+  final List<Map<String, String>> _paymentTypeOptions = [
+    {'value': 'all', 'label': 'ทุกประเภท'},
+    {'value': 'cash', 'label': 'เงินสด'},
+    {'value': 'credit_card', 'label': 'บัตรเครดิต'},
+  ];
+  String _selectedPaymentType = 'all';
+
   @override
   void initState() {
     super.initState();
@@ -93,7 +100,9 @@ class _ReportScreenState extends State<ReportScreen> {
       final matchPayer = _selectedPayerFilter == null ||
           _selectedPayerFilter!.id == -1 ||
           exp.payerId == _selectedPayerFilter!.id;
-      return matchYear && matchMonth && matchPayer;
+      final matchPaymentType = _selectedPaymentType == 'all' ||
+          exp.paymentType == _selectedPaymentType;
+      return matchYear && matchMonth && matchPayer && matchPaymentType;
     }).toList();
 
     // Category totals
@@ -512,6 +521,28 @@ class _ReportScreenState extends State<ReportScreen> {
                 },
               ),
               const SizedBox(height: 20),
+              DropdownButtonFormField<String>(
+                value: _selectedPaymentType,
+                decoration: const InputDecoration(
+                  labelText: 'Filter by Payment Type',
+                  border: OutlineInputBorder(),
+                ),
+                items: _paymentTypeOptions
+                    .map(
+                      (opt) => DropdownMenuItem(
+                        value: opt['value'],
+                        child: Text(opt['label']!),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() => _selectedPaymentType = val);
+                    _loadReportData();
+                  }
+                },
+              ),
+              const SizedBox(height: 12),
               Card(
                 elevation: 4,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
